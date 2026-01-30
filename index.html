@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>Expense Tracker</title>
 
-  <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
@@ -21,10 +20,7 @@
       border-radius: 14px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.12);
     }
-    h2 {
-      text-align: center;
-      margin-bottom: 15px;
-    }
+    h2 { text-align: center; }
     input, select, button {
       width: 100%;
       padding: 10px;
@@ -38,26 +34,18 @@
       border-radius: 6px;
       cursor: pointer;
     }
-    button:hover {
-      background: #0056b3;
-    }
     .danger {
       background: #dc3545;
+      padding: 4px 8px;
+      border-radius: 4px;
     }
-    .danger:hover {
-      background: #a71d2a;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-    }
+    ul { list-style: none; padding: 0; }
     li {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 6px 0;
       border-bottom: 1px solid #ddd;
-      font-size: 14px;
     }
     .summary {
       background: #eef1ff;
@@ -70,29 +58,18 @@
       gap: 10px;
       margin-top: 10px;
     }
-    canvas {
-      margin-top: 15px;
-    }
-    .small {
-      font-size: 12px;
-      color: #666;
-      text-align: center;
-      margin-top: 8px;
-    }
   </style>
 </head>
-<body>
 
+<body>
 <div class="container">
   <h2>Expense Tracker</h2>
 
   <input type="number" id="amount" placeholder="Enter amount (₹)">
-  
   <select id="type">
     <option value="spent">Spent</option>
     <option value="gained">Gained</option>
   </select>
-
   <button onclick="addTransaction()">Add Transaction</button>
 
   <h3>Transactions</h3>
@@ -104,130 +81,134 @@
   </div>
 
   <div class="summary">
-    <p><b>Total Spent:</b> ₹<span id="spent">0</span></p>
-    <p><b>Total Gained:</b> ₹<span id="gained">0</span></p>
-    <p><b>Net Profit:</b> ₹<span id="net">0</span></p>
+    <p>Total Spent: ₹<span id="spent">0</span></p>
+    <p>Total Gained: ₹<span id="gained">0</span></p>
+    <p>Net Profit: ₹<span id="net">0</span></p>
   </div>
 
   <div class="summary" id="reportBox" style="display:none;">
     <h4 id="reportTitle"></h4>
-    <p><b>Spent:</b> ₹<span id="rSpent">0</span></p>
-    <p><b>Gained:</b> ₹<span id="rGained">0</span></p>
-    <p><b>Net:</b> ₹<span id="rNet">0</span></p>
-
+    <p>Spent: ₹<span id="rSpent"></span></p>
+    <p>Gained: ₹<span id="rGained"></span></p>
+    <p>Net: ₹<span id="rNet"></span></p>
     <canvas id="pieChart"></canvas>
   </div>
-
-  <p class="small">Data stored locally • Charts require internet</p>
 </div>
 
 <script>
-  let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
-  let chart;
+const API = "http://localhost:5000";
+let chart;
+let transactions = [];
 
-  function save() {
-    localStorage.setItem("transactions", JSON.stringify(transactions));
+/* LOAD */
+async function loadTransactions() {
+  const res = await fetch(`${API}/transactions`);
+  transactions = await res.json();
+  render();
+}
+
+/* ADD */
+async function addTransaction() {
+  const amount = document.getElementById("amount").value;
+  const type = document.getElementById("type").value;
+
+  if (!amount) {
+    alert("Enter amount");
+    return;
   }
 
-  function addTransaction() {
-    const amount = document.getElementById("amount").value;
-    const type = document.getElementById("type").value;
-
-    if (!amount) {
-      alert("Enter amount");
-      return;
-    }
-
-    transactions.push({
+  await fetch(`${API}/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
       amount: Number(amount),
       type,
       date: new Date().toISOString()
-    });
+    })
+  });
 
-    document.getElementById("amount").value = "";
-    save();
-    render();
+  document.getElementById("amount").value = "";
+  loadTransactions();
+}
+
+/* DELETE (SAFE EVEN IF id MISSING) */
+async function deleteTransaction(index) {
+  if (!transactions[index]?.id) {
+    alert("Delete requires backend ID");
+    return;
   }
+  await fetch(`${API}/transactions/${transactions[index].id}`, {
+    method: "DELETE"
+  });
+  loadTransactions();
+}
 
-  function deleteTransaction(index) {
-    transactions.splice(index, 1);
-    save();
-    render();
-  }
+/* RENDER */
+function render() {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
 
-  function render() {
-    const list = document.getElementById("list");
-    list.innerHTML = "";
+  let spent = 0, gained = 0;
 
-    let spent = 0, gained = 0;
+  transactions.forEach((t, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      ${t.type.toUpperCase()} - ₹${t.amount}
+      <button class="danger" onclick="deleteTransaction(${i})">X</button>
+    `;
+    list.appendChild(li);
 
-    transactions.forEach((t, i) => {
-      const li = document.createElement("li");
-      li.innerHTML = `
-        ${t.type.toUpperCase()} - ₹${t.amount}
-        <button class="danger" onclick="deleteTransaction(${i})">X</button>
-      `;
-      list.appendChild(li);
+    t.type === "spent" ? spent += t.amount : gained += t.amount;
+  });
 
-      if (t.type === "spent") spent += t.amount;
-      else gained += t.amount;
-    });
+  document.getElementById("spent").innerText = spent;
+  document.getElementById("gained").innerText = gained;
+  document.getElementById("net").innerText = gained - spent;
+}
 
-    document.getElementById("spent").innerText = spent;
-    document.getElementById("gained").innerText = gained;
-    document.getElementById("net").innerText = gained - spent;
-  }
+/* REPORTS */
+function weeklyReport() { generateReport(7, "Weekly Report"); }
+function monthlyReport() { generateReport(30, "Monthly Report"); }
 
-  function weeklyReport() {
-    generateReport(7, "Weekly Report (Last 7 Days)");
-  }
+function generateReport(days, title) {
+  const past = new Date();
+  past.setDate(past.getDate() - days);
 
-  function monthlyReport() {
-    generateReport(30, "Monthly Report (Last 30 Days)");
-  }
+  let spent = 0, gained = 0;
 
-  function generateReport(days, title) {
-    const now = new Date();
-    const past = new Date();
-    past.setDate(now.getDate() - days);
+  transactions.forEach(t => {
+    if (!t.date) return;
+    if (new Date(t.date) >= past) {
+      t.type === "spent" ? spent += t.amount : gained += t.amount;
+    }
+  });
 
-    let spent = 0, gained = 0;
+  document.getElementById("reportTitle").innerText = title;
+  document.getElementById("rSpent").innerText = spent;
+  document.getElementById("rGained").innerText = gained;
+  document.getElementById("rNet").innerText = gained - spent;
+  document.getElementById("reportBox").style.display = "block";
 
-    transactions.forEach(t => {
-      const d = new Date(t.date);
-      if (d >= past) {
-        if (t.type === "spent") spent += t.amount;
-        else gained += t.amount;
-      }
-    });
+  drawChart(spent, gained);
+}
 
-    document.getElementById("reportTitle").innerText = title;
-    document.getElementById("rSpent").innerText = spent;
-    document.getElementById("rGained").innerText = gained;
-    document.getElementById("rNet").innerText = gained - spent;
-    document.getElementById("reportBox").style.display = "block";
+/* CHART */
+function drawChart(spent, gained) {
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById("pieChart"), {
+    type: "pie",
+    data: {
+      labels: ["Spent", "Gained"],
+      datasets: [{
+        data: [spent, gained],
+        backgroundColor: ["#dc3545", "#28a745"]
+      }]
+    }
+  });
+}
 
-    drawChart(spent, gained);
-  }
-
-  function drawChart(spent, gained) {
-    const ctx = document.getElementById("pieChart");
-
-    if (chart) chart.destroy();
-
-    chart = new Chart(ctx, {
-      type: "pie",
-      data: {
-        labels: ["Spent", "Gained"],
-        datasets: [{
-          data: [spent, gained],
-          backgroundColor: ["#dc3545", "#28a745"]
-        }]
-      }
-    });
-  }
-
-  render();
+/* INIT */
+loadTransactions();
 </script>
 
 </body>
